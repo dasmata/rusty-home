@@ -1,34 +1,63 @@
-use reqwest::Response;
-use serde::{Deserialize, Serialize};
+use std::io::Write;
+use std::env;
+use async_recursion::async_recursion;
+use hubitat::device::switch;
+use hubitat::http::HClient;
+use config::Config;
 
-#[derive(Serialize, Deserialize)]
-struct CatFact {
-    fact: String,
-    length: i32
-}
+mod hubitat;
+mod config;
 
 #[tokio::main]
 async fn main() {
-    let result_response = get_cat_fact().await;
+    let args: Vec<String> = env::args().collect();
+    for i in args {
+        if i.eq("--config") {
+            config::build_config();
+        }
+    }
 
-    let fact: Response = match result_response {
-        Ok(r) => r,
-        Err(e) => panic!("Could not GET the cat fact! {:?}", e)
-    };
-    let json_response: reqwest::Result<CatFact> = fact.json().await;
-    let cat_fact = match json_response {
-        Ok(r) => r,
-        Err(e) => panic!("Could not PARSE the cat fact! {:?}", e)
-    };
+    let config = load_config();
+    println!("{}", config.version);
 
-    println!("fact: {}", cat_fact.fact);
-    println!("length: {}", cat_fact.length);
+
+    let hubitat_api: HClient = HClient::new(&config.hubitat_host, &config.hubitat_key);
+    let study_switch = switch::Device::new(
+        "174",
+        hubitat_api
+    );
+    init(study_switch).await;
 }
 
-async fn get_cat_fact() -> Result<Response, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
-    let body = client.get("https://catfact.ninja/fact").send()
-        .await?;
+#[async_recursion(?Send)]
+async fn init(mut sw: switch::Device) -> () {
+    let mut input = String::new();
+    println!("Should I toogle?");
+    std::io::stdin().read_line(&mut input).unwrap();
 
-    Ok(body)
+    if input.trim_end() == "y" {
+        let toggle_result = sw.toggle().await;
+        match toggle_result {
+            Ok(_r) => println!("Switch toggled"),
+            Err(e) => panic!("Command not processed: {:?}", e)
+        };
+        init(sw).await;
+    } else {
+        println!("pacat");
+    }
+}
+
+fn load_config() -> Config {
+    let config_load = config::load();
+    let config: Config = match config_load {
+        Err(_e) => panic!("Could not load config"),
+        Ok(r) => r
+    };
+
+    if config.version > 0 as u8 {
+        return config;
+    }
+
+    config::build_config();
+    load_config()
 }
