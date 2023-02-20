@@ -1,7 +1,6 @@
 use std::io::Write;
 use serde::{Deserialize, Serialize};
 use confy;
-use confy::ConfyError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {

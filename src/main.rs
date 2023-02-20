@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::env;
 use async_recursion::async_recursion;
 use hubitat::device::switch;
@@ -7,13 +6,17 @@ use config::Config;
 
 mod hubitat;
 mod config;
+mod rf;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ! {
     let args: Vec<String> = env::args().collect();
     for i in args {
         if i.eq("--config") {
-            config::build_config();
+            match config::build_config() {
+                Ok(..) => (),
+                Err(..) => panic!("Could not create config!")
+            };
         }
     }
 
@@ -26,7 +29,10 @@ async fn main() {
         "174",
         hubitat_api
     );
-    init(study_switch).await;
+
+    rf::init_rf();
+
+    // init(study_switch).await;
 }
 
 #[async_recursion(?Send)]
@@ -58,6 +64,9 @@ fn load_config() -> Config {
         return config;
     }
 
-    config::build_config();
+    match config::build_config() {
+        Ok(..) => (),
+        Err(..) => panic!("|could not build config!")
+    };
     load_config()
 }
